@@ -130,9 +130,6 @@ def cacti(associatividade, tamanho_do_bloco, numero_de_blocos, cache_num):
     return cacti_treated_results
 
 
-def salva_resultados():
-    pass
-
 def testa_cache(associatividade,tamanho_do_bloco,numero_de_blocos):
     """
         Recebe três listas contendo a associatividade, tamanho dos blocos e os numeros de blocos da 
@@ -185,7 +182,7 @@ def tempo_cache(sim_cache_data,cacti_data):
     LAMP = 13.6692
     EAMP = 8.64848
 
-    # Constantes - Tipo de memória
+    # Constantes - Tipo de memória cache
     INST = 0
     DADOS = 1
 
@@ -210,27 +207,93 @@ def tempo_cache(sim_cache_data,cacti_data):
     # (onde LAMP é Latência de um Acesso à Mem. Principal, NWB é o Número de writebacks)
     return tempo_total_INST,tempo_total_DADOS
 
-def main():
-    # Inicia um banco de dados com os resultados
-    # To be done
-
-    associatividade = [
-        1, # Associatividade memória cache de Instruções
-        1  # Associatividade memória cache de Dados
-    ]
-    tamanho_do_bloco = [
-        8, # Tamanho do bloco da memória cache Instruções
-        8  # Tamanho do bloco da memória cache Dados
-    ]
-    numero_de_blocos = [
-        32, # Numero de blocos da memória cache Instruções
-        32  # Numero de blocos da memória cache Dados
-    ]
-
+def metricas_cache(associatividade, tamanho_do_bloco, numero_de_blocos):
     sim_cache_data, cacti_data = testa_cache(associatividade,tamanho_do_bloco,numero_de_blocos)
 
     tempo_total_INST, tempo_total_DADOS = tempo_cache(sim_cache_data,cacti_data)
     energia_total_INST, energia_total_DADOS = energia_cache(sim_cache_data,cacti_data)
+    
+    # Constantes - Tipo de memória cache
+    INST = 0
+    DADOS = 1
+
+    print("Tempo total","Energia total")
+    print("INST","A =",associatividade[INST],"TB =",tamanho_do_bloco[INST],"NB =",numero_de_blocos[INST])
+    print(tempo_total_INST,energia_total_INST)
+    print("DADOS","A =",associatividade[DADOS],"TB =",tamanho_do_bloco[DADOS],"NB =",numero_de_blocos[DADOS])
+    print(tempo_total_DADOS,energia_total_DADOS)
+    print()
+    return tempo_total_INST, tempo_total_DADOS, energia_total_INST, energia_total_DADOS
+
+def salva_resultados(tempo_I, tempo_D, energia_I, energia_D, associatividade, tamanho_do_bloco, numero_de_blocos):
+    # Inicia um banco de dados com os resultados
+    # To be done
+    pass
+
+def menu():
+    qual_varia = input(
+        """Escolha qual das caracteristicas da memoria cache irá variar:
+        [1] Associatividade
+        [2] Numero de Blocos
+        [3] Tamanho do Bloco
+        Insira um número para escolher:
+        """)
+    if(qual_varia == '1'):
+        qual_varia = "Associatividade"
+    elif(qual_varia == '2'):
+        qual_varia = "Numero de Blocos"
+    elif(qual_varia == '3'):
+        qual_varia = "Tamanho do Bloco"
+    else:
+        print("Digite uma opcao valida!")
+        exit(0)
+    if(qual_varia == "Tamanho do Bloco"):
+        quanto_varia = str(input(
+            """Determine qual o intervalo das potências de 2 de variação para {qual_var}:
+            Exemplo: 3,5 (O valor minimo para o tamanho de bloco é 8, 
+            logo, o valor inicial é fixo em três)
+            Saida: 8,16,32
+            Insira um intervalo: (X >= 3) Ex: X,Y:
+            """.format(qual_var = qual_varia)))
+    else:
+        quanto_varia = str(input(
+            """Determine qual o intervalo das potências de 2 de variação para {qual_var}:
+            Exemplo: 0,3
+            Saida: 1,2,4,8
+            Insira um intervalo. Ex: X,Y:
+            """.format(qual_var = qual_varia)))
+    
+    quanto_varia = [int(x) for x in quanto_varia.split(',')]
+    if(len(quanto_varia) != 2):
+        print("Digite um range valido!")
+        exit(0)
+    return qual_varia, quanto_varia    
+
+def main():
+    associatividade = [2,2] 
+    tamanho_do_bloco = [8,8] 
+    numero_de_blocos = [32,32]
+    qual_varia, quanto_varia = menu()
+    
+    for i in range(quanto_varia[1]):
+        for j in range(quanto_varia[1]):
+            if(qual_varia == "Associatividade"):
+                associatividade = [
+                    2**i, # Associatividade memória cache de Instruções
+                    2**j  # Associatividade memória cache de Dados
+                ]
+            elif(qual_varia == "Tamanho do Bloco"):
+                tamanho_do_bloco = [
+                    2**(i+3), # Tamanho do bloco da memória cache Instruções
+                    2**(j+3)  # Tamanho do bloco da memória cache Dados
+                ]
+            elif(qual_varia == "Numero de Blocos"):
+                numero_de_blocos = [
+                    2**i, # Numero de blocos da memória cache Instruções
+                    2**j  # Numero de blocos da memória cache Dados
+                ]
+            tempo_I, tempo_D, energia_I, energia_D = metricas_cache(associatividade,tamanho_do_bloco,numero_de_blocos)
+            salva_resultados(tempo_I, tempo_D, energia_I, energia_D, associatividade, tamanho_do_bloco, numero_de_blocos)
 
     print("FIM")
 
