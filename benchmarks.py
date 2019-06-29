@@ -1,14 +1,22 @@
-import subprocess as sp
 import re
+import matplotlib.pyplot as plt
+import subprocess as sp
+import os
+
+testes = []
 
 def sim_cache(associatividade, tamanho_do_bloco, numero_de_blocos):
     cache_instrucoes = "-cache:il1 il1:" + str(numero_de_blocos[0]) + ":" + str(tamanho_do_bloco[0]) + ":" + str(associatividade[0]) + ":l"
     cache_dados = "-cache:dl1 dl1:" + str(numero_de_blocos[1]) + ":" + str(tamanho_do_bloco[1]) + ":" + str(associatividade[1]) + ":l"
     benchmark_path = "./benchmarks/benchs_trabalho/"
-    comando = "./simplesim-3.0/sim-cache " + cache_instrucoes + " " + cache_dados + " -cache:dl2 none -cache:il2 none " + benchmark_path
-    # benchmarks = ["amp.ss","mm.ss","basicmath.ss"]
-    benchmarks = ["mm.ss"]
-    benchmark_results = [sp.getoutput(comando + benchmark) for benchmark in benchmarks]
+    comando = "./simplesim-3.0/sim-cache " + cache_instrucoes + " " + cache_dados + " -cache:dl2 none -cache:il2 none " + " -redir:sim ./results/test.txt -max:inst 40000000 " + benchmark_path
+    benchmarks = ["amp.ss","mm.ss","basicmath.ss"]#,"cc.ss -O 1smt.i"]
+    # benchmarks = ["mm.ss"]
+    # print(comando+"mm.ss")
+    benchmark_results = []
+    for benchmark in benchmarks:
+        os.system(comando + benchmark + ">/dev/null 2>&1") # Run the command, supressing it output
+        benchmark_results.append(open("./results/test.txt","r").read())
     benchmark_treated_results = [trata_retorno_sim_cache(benchmark) for benchmark in benchmark_results]
     return benchmark_treated_results
 
@@ -102,28 +110,30 @@ def trata_retorno_cacti(cacti):
     return cacti_data
 
 def cacti(associatividade, tamanho_do_bloco, numero_de_blocos, cache_num):
-    comando = "./cacti65/cacti -infile cache.cfg"
+    comando = "./cacti65/cacti -infile ./cacti65/cache.cfg"
     cacti_all_results = []
+
     for i in range(cache_num):
         tamanho_total = tamanho_do_bloco[i] * numero_de_blocos[i]
 
-        cache_cfg = """
-        # Cache size
-        -size (bytes) {tamanho_tot}
+        cache_cfg = """# Cache size
+-size (bytes) {tamanho_tot}
 
-        # Line size
-        -block size (bytes) {bloco_tamanho}
+# Line size
+-block size (bytes) {bloco_tamanho}
 
-        # To model Fully Associative cache, set associativity to zero
+# To model Fully Associative cache, set associativity to zero
 
-        -associativity {associativi}
+-associativity {associativi}
         """.format(tamanho_tot = tamanho_total, bloco_tamanho = tamanho_do_bloco[i], associativi = associatividade[i])
-
-        cache_cfg_rest = open("./cacti65/cache_rest.cfg","r").readlines()
-        cache_cfg = cache_cfg + str(cache_cfg_rest).replace("\n",'\n')
-        open("./cacti65/cache.cfg",'w').write(cache_cfg)
-
+        cache_cfg_rest = open("./cacti65/cache_rest.cfg","r")
+        cache_cfg_rest = cache_cfg_rest.read()
+        cache_cfg = cache_cfg + cache_cfg_rest
+        final_file = open("./cacti65/cache.cfg",'w')
+        final_file.write(cache_cfg)
+        final_file.close()
         cacti_results = sp.getoutput(comando)
+        
         cacti_all_results.append(cacti_results)
     
     cacti_treated_results = [trata_retorno_cacti(cacti) for cacti in cacti_all_results]
@@ -160,7 +170,7 @@ def energia_cache(sim_cache_data,cacti_data):
            NCH = sim_cache_test.get('il1.hits')
            EAC = cacti_data[INST].get('Read')
            NCM = sim_cache_test.get('il1.misses')
-           NWB = sim_cache_test.get('il1.writebacks')
+           NWB = sim_cache_test.get('il1.writebacks') 
            energia_total_INST += NCH*EAC + NCM*EAC +NCM*EAMP + NWB*EAMP
     # energia_total_ = NCH*EAC + NCM*EAC +NCM*EAMP + NWB*EAMP 
 
@@ -207,9 +217,17 @@ def tempo_cache(sim_cache_data,cacti_data):
     # (onde LAMP é Latência de um Acesso à Mem. Principal, NWB é o Número de writebacks)
     return tempo_total_INST,tempo_total_DADOS
 
+def salva_teste(associatividade,tamanho_do_bloco,numero_de_blocos,tempo_total_INST,tempo_total_DADOS,energia_total_INST,energia_total_DADOS):
+    INST = 0
+    DADOS = 1
+
+    testeINST = [associatividade[INST],tamanho_do_bloco[INST],numero_de_blocos[INST],tempo_total_INST,energia_total_INST]
+    testeDADOS = [associatividade[DADOS],tamanho_do_bloco[DADOS],numero_de_blocos[DADOS],tempo_total_DADOS,energia_total_DADOS]
+    teste = [testeINST,testeDADOS]
+    testes.append(teste)
+
 def metricas_cache(associatividade, tamanho_do_bloco, numero_de_blocos):
     sim_cache_data, cacti_data = testa_cache(associatividade,tamanho_do_bloco,numero_de_blocos)
-
     tempo_total_INST, tempo_total_DADOS = tempo_cache(sim_cache_data,cacti_data)
     energia_total_INST, energia_total_DADOS = energia_cache(sim_cache_data,cacti_data)
     
@@ -223,12 +241,65 @@ def metricas_cache(associatividade, tamanho_do_bloco, numero_de_blocos):
     print("DADOS","A =",associatividade[DADOS],"TB =",tamanho_do_bloco[DADOS],"NB =",numero_de_blocos[DADOS])
     print(tempo_total_DADOS,energia_total_DADOS)
     print()
+    salva_teste(associatividade,tamanho_do_bloco,numero_de_blocos,tempo_total_INST,tempo_total_DADOS,energia_total_INST,energia_total_DADOS)
     return tempo_total_INST, tempo_total_DADOS, energia_total_INST, energia_total_DADOS
 
-def salva_resultados(tempo_I, tempo_D, energia_I, energia_D, associatividade, tamanho_do_bloco, numero_de_blocos):
+def cria_sub_grafico(x,y,label_x,label_y,i_plot):
+    plt.subplot(2,2,i_plot)
+    plt.plot(x, y, 'ro')
+    plt.ylabel(label_y)
+    plt.xlabel(label_x)
+    plt.xscale("log")
+
+class graph():
+    def __init__(self, *args, **kwargs):
+        return super().__init__(*args, **kwargs)
+    
+def cria_grafico_energia_tempo(testes,qual_varia,sort_atrib,i_plots):
+        ENERGY = 3
+        TIME = 4
+        testes.sort(key=lambda x: x[sort_atrib])
+        X = [teste[sort_atrib] for teste in testes]
+        energiaY = [teste[ENERGY] for teste in testes]
+        tempoY = [teste[TIME] for teste in testes]
+        cria_sub_grafico(X,energiaY,qual_varia,"ENERGY",i_plots[0])
+        cria_sub_grafico(X,tempoY,qual_varia,"TIME(ns)",i_plots[1])
+
+def salva_imagem(plt_):
+    number_of_svgs = len([name for name in os.listdir('./results/') if os.path.isfile(name) if str(name).count(".svg")])
+    plt.savefig('./results/test_' + str(number_of_svgs) + '.svg', format='svg', dpi=1200)
+
+def exibe_resultados(qual_varia):
     # Inicia um banco de dados com os resultados
-    # To be done
-    pass
+    fig, axs = plt.subplots(4) # Cria figura dos gráficos
+    INST = 0
+    DADOS = 1
+
+    ASSOCIATIVIDADE = 0
+    BLOCK_SIZE = 1
+    NUMBER_OF_BLOCKS = 2
+
+    if(qual_varia == "Associatividade"):
+        testesINST = [teste[INST] for teste in testes]
+        fig.suptitle(qual_varia+ " variando " + "Tamanho do bloco= " + str(testesINST[0][BLOCK_SIZE]) + " Número de blocos= " + str(testesINST[0][NUMBER_OF_BLOCKS])) 
+        cria_grafico_energia_tempo(testesINST,qual_varia,ASSOCIATIVIDADE,[1,2])
+        testesDADOS = [teste[DADOS] for teste in testes]
+        cria_grafico_energia_tempo(testesDADOS,qual_varia,ASSOCIATIVIDADE,[3,4])
+    elif(qual_varia == "Tamanho do Bloco"):
+        testesINST = [teste[INST] for teste in testes]
+        fig.suptitle(qual_varia+ " variando " + "Associatividade= " + str(testesINST[0][ASSOCIATIVIDADE]) + " Número de blocos= " + str(testesINST[0][NUMBER_OF_BLOCKS])) 
+        cria_grafico_energia_tempo(testesINST,qual_varia,BLOCK_SIZE,[1,2])
+        testesDADOS = [teste[DADOS] for teste in testes]
+        cria_grafico_energia_tempo(testesDADOS,qual_varia,BLOCK_SIZE,[3,4])
+    elif(qual_varia == "Numero de Blocos"):
+        testesINST = [teste[INST] for teste in testes]
+        fig.suptitle(qual_varia+ " variando " + "Tamanho do bloco= " + str(testesINST[0][BLOCK_SIZE]) + " Associatividade= " + str(testesINST[0][ASSOCIATIVIDADE])) 
+        cria_grafico_energia_tempo(testesINST,qual_varia,NUMBER_OF_BLOCKS,[1,2])
+        testesDADOS = [teste[DADOS] for teste in testes]
+        cria_grafico_energia_tempo(testesDADOS,qual_varia,NUMBER_OF_BLOCKS,[3,4])
+    salva_imagem(plt)
+    plt.show()
+    
 
 def menu():
     qual_varia = input(
@@ -270,13 +341,15 @@ def menu():
     return qual_varia, quanto_varia    
 
 def main():
-    associatividade = [2,2] 
-    tamanho_do_bloco = [8,8] 
-    numero_de_blocos = [32,32]
+    associatividade = [4,4] 
+    tamanho_do_bloco = [64,64] 
+    numero_de_blocos = [256,256]
+
+    # tempo_I, tempo_D, energia_I, energia_D = metricas_cache(associatividade,tamanho_do_bloco,numero_de_blocos)
     qual_varia, quanto_varia = menu()
     
-    for i in range(quanto_varia[1]):
-        for j in range(quanto_varia[1]):
+    for i in range(quanto_varia[0],quanto_varia[1] + 1):
+        for j in range(quanto_varia[0],quanto_varia[1] + 1):
             if(qual_varia == "Associatividade"):
                 associatividade = [
                     2**i, # Associatividade memória cache de Instruções
@@ -292,9 +365,19 @@ def main():
                     2**i, # Numero de blocos da memória cache Instruções
                     2**j  # Numero de blocos da memória cache Dados
                 ]
+            if(associatividade[0] == tamanho_do_bloco[0] or associatividade[1] == tamanho_do_bloco[0]):
+                continue
+            if(associatividade[0]>16 or associatividade[1]>16):
+                continue
+            if(tamanho_do_bloco[0] < 8 or tamanho_do_bloco[1] < 8):
+                continue
+            if(numero_de_blocos[0] < associatividade[0] or numero_de_blocos[1] < associatividade[0]):
+                continue
+            if(numero_de_blocos[0] < associatividade[1] or numero_de_blocos[1] < associatividade[1]):
+                continue
             tempo_I, tempo_D, energia_I, energia_D = metricas_cache(associatividade,tamanho_do_bloco,numero_de_blocos)
-            salva_resultados(tempo_I, tempo_D, energia_I, energia_D, associatividade, tamanho_do_bloco, numero_de_blocos)
-
+            # salva_resultados(tempo_I, tempo_D, energia_I, energia_D, associatividade, tamanho_do_bloco, numero_de_blocos,qual_varia)
+    exibe_resultados(qual_varia)
     print("FIM")
 
 if __name__ == "__main__":
